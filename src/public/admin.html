@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - ESK Träningsapp</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header>
+    <h1>ESK Träningsapp</h1>
+    <p>Administration</p>
+  </header>
+
+  <nav>
+    <a href="/">Kalender</a>
+    <a href="/admin" class="active">Admin</a>
+  </nav>
+
+  <div class="container">
+    <!-- ÖVNINGAR -->
+    <div class="admin-section">
+      <div class="admin-section-header">
+        <h2>Övningar</h2>
+        <button class="btn btn-primary" onclick="openExerciseModal()">+ Ny övning</button>
+      </div>
+      <div class="admin-section-content">
+        <ul class="admin-list" id="exerciseList">
+          <!-- Övningar laddas här -->
+        </ul>
+        <div class="empty-state" id="exerciseEmptyState" style="display: none;">
+          <div class="empty-state-icon">⚽</div>
+          <h3>Inga övningar skapade</h3>
+          <p>Klicka på "Ny övning" för att skapa din första övning</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TRÄNINGAR -->
+    <div class="admin-section">
+      <div class="admin-section-header">
+        <h2>Träningar</h2>
+        <button class="btn btn-primary" onclick="openTrainingModal()">+ Ny träning</button>
+      </div>
+      <div class="admin-section-content">
+        <ul class="admin-list" id="trainingList">
+          <!-- Träningar laddas här -->
+        </ul>
+        <div class="empty-state" id="trainingEmptyState" style="display: none;">
+          <div class="empty-state-icon">📅</div>
+          <h3>Inga träningar planerade</h3>
+          <p>Klicka på "Ny träning" för att skapa din första träning</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Ny/Redigera övning -->
+  <div class="modal" id="exerciseModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="exerciseModalTitle">Ny övning</h2>
+        <button class="modal-close" onclick="closeExerciseModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="exerciseForm">
+          <input type="hidden" id="exerciseId">
+
+          <div class="form-group">
+            <label for="exerciseName">Namn *</label>
+            <input type="text" id="exerciseName" required placeholder="T.ex. Passningsövning i fyrkant">
+          </div>
+
+          <div class="form-group">
+            <label for="exerciseDescription">Beskrivning</label>
+            <textarea id="exerciseDescription" placeholder="Beskriv övningen, regler, variationer etc."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Bilder</label>
+            <div class="file-upload" id="imageUpload">
+              <input type="file" id="imageInput" accept="image/*" multiple>
+              <p>Klicka eller dra bilder hit</p>
+            </div>
+            <div class="uploaded-files" id="uploadedImages"></div>
+          </div>
+
+          <div class="form-group">
+            <label>Video</label>
+            <div class="file-upload" id="videoUpload">
+              <input type="file" id="videoInput" accept="video/*">
+              <p>Klicka eller dra en video hit</p>
+            </div>
+            <div id="uploadedVideo"></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeExerciseModal()">Avbryt</button>
+        <button class="btn btn-primary" onclick="saveExercise()">Spara</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Ny/Redigera träning -->
+  <div class="modal" id="trainingModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="trainingModalTitle">Ny träning</h2>
+        <button class="modal-close" onclick="closeTrainingModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="trainingForm">
+          <input type="hidden" id="trainingId">
+
+          <div class="form-group">
+            <label for="trainingDate">Datum *</label>
+            <input type="date" id="trainingDate" required>
+          </div>
+
+          <div class="form-group">
+            <label for="trainingTime">Tid</label>
+            <input type="time" id="trainingTime">
+          </div>
+
+          <div class="form-group">
+            <label for="trainingLocation">Plats</label>
+            <input type="text" id="trainingLocation" placeholder="T.ex. Huvudplanen">
+          </div>
+
+          <div class="form-group">
+            <label for="trainingDescription">Beskrivning</label>
+            <textarea id="trainingDescription" placeholder="Extra information om träningen"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Välj övningar</label>
+            <div id="exerciseCheckboxes">
+              <!-- Övningar laddas här -->
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeTrainingModal()">Avbryt</button>
+        <button class="btn btn-primary" onclick="saveTraining()">Spara</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESK Träningsapp</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header>
+    <h1>ESK Träningsapp</h1>
+    <p>Förbered dig inför träningen</p>
+  </header>
+
+  <nav>
+    <a href="/" class="active">Kalender</a>
+    <a href="/admin">Admin</a>
+  </nav>
+
+  <div class="container">
+    <!-- Kalender-vy -->
+    <div class="calendar">
+      <div class="calendar-header">
+        <h2 id="currentMonth">Kommande träningar</h2>
+      </div>
+
+      <ul class="training-list" id="trainingList">
+        <!-- Träningar laddas här via JavaScript -->
+      </ul>
+
+      <div class="empty-state" id="emptyState" style="display: none;">
+        <div class="empty-state-icon">📅</div>
+        <h3>Inga träningar planerade</h3>
+        <p>Gå till admin-sidan för att skapa träningar</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal för träningsdetaljer -->
+  <div class="modal" id="trainingModal">
+    <div class="modal-content" style="max-width: 700px;">
+      <div class="modal-header">
+        <h2 id="modalTitle">Träning</h2>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="trainingDetails">
+          <!-- Detaljer laddas här -->
+        </div>
+        <h3 style="margin-top: 20px; margin-bottom: 15px;">Övningar</h3>
+        <div class="exercise-grid" id="exerciseList">
+          <!-- Övningar laddas här -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal för övningsdetaljer -->
+  <div class="modal" id="exerciseModal">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h2 id="exerciseModalTitle">Övning</h2>
+        <button class="modal-close" onclick="closeExerciseModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="exerciseDetails">
+        <!-- Övningsdetaljer laddas här -->
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
