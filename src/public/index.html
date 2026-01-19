@@ -12,26 +12,31 @@
     <p>Förbered dig inför träningen</p>
   </header>
 
+  <div class="user-header">
+    <div class="user-info">
+      <span class="user-name" id="userName">Laddar...</span>
+      <span class="user-role" id="userRole"></span>
+    </div>
+    <button class="logout-btn" onclick="logout()">Logga ut</button>
+  </div>
+
   <nav>
     <a href="/" class="active">Kalender</a>
-    <a href="/admin">Admin</a>
+    <a href="/admin" id="adminLink" style="display: none;">Admin</a>
   </nav>
 
   <div class="container">
-    <!-- Kalender-vy -->
     <div class="calendar">
       <div class="calendar-header">
         <h2 id="currentMonth">Kommande träningar</h2>
       </div>
 
-      <ul class="training-list" id="trainingList">
-        <!-- Träningar laddas här via JavaScript -->
-      </ul>
+      <ul class="training-list" id="trainingList"></ul>
 
       <div class="empty-state" id="emptyState" style="display: none;">
         <div class="empty-state-icon">📅</div>
         <h3>Inga träningar planerade</h3>
-        <p>Gå till admin-sidan för att skapa träningar</p>
+        <p>Kom tillbaka senare för att se kommande träningar</p>
       </div>
     </div>
   </div>
@@ -44,13 +49,9 @@
         <button class="modal-close" onclick="closeModal()">&times;</button>
       </div>
       <div class="modal-body">
-        <div id="trainingDetails">
-          <!-- Detaljer laddas här -->
-        </div>
+        <div id="trainingDetails"></div>
         <h3 style="margin-top: 20px; margin-bottom: 15px;">Övningar</h3>
-        <div class="exercise-grid" id="exerciseList">
-          <!-- Övningar laddas här -->
-        </div>
+        <div class="exercise-grid" id="exerciseList"></div>
       </div>
     </div>
   </div>
@@ -62,9 +63,7 @@
         <h2 id="exerciseModalTitle">Övning</h2>
         <button class="modal-close" onclick="closeExerciseModal()">&times;</button>
       </div>
-      <div class="modal-body" id="exerciseDetails">
-        <!-- Övningsdetaljer laddas här -->
-      </div>
+      <div class="modal-body" id="exerciseDetails"></div>
     </div>
   </div>
 

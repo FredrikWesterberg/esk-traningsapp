@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logga in - ESK Träningsapp</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header>
+    <h1>ESK Träningsapp</h1>
+    <p>Logga in för att fortsätta</p>
+  </header>
+
+  <div class="container">
+    <div class="auth-card">
+      <h2>Logga in</h2>
+
+      <div class="alert alert-error" id="errorMessage" style="display: none;"></div>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="email">E-post</label>
+          <input type="email" id="email" required placeholder="din@epost.se">
+        </div>
+
+        <div class="form-group">
+          <label for="password">Lösenord</label>
+          <input type="password" id="password" required placeholder="Ditt lösenord">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Logga in</button>
+      </form>
+
+      <p class="auth-link">
+        Har du ingen användare? <a href="/register">Registrera dig</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const errorDiv = document.getElementById('errorMessage');
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          window.location.href = '/';
+        } else {
+          errorDiv.textContent = data.error;
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        errorDiv.textContent = 'Något gick fel. Försök igen.';
+        errorDiv.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

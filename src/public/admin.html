@@ -12,44 +12,95 @@
     <p>Administration</p>
   </header>
 
+  <div class="user-header">
+    <div class="user-info">
+      <span class="user-name" id="userName">Laddar...</span>
+      <span class="user-role">Admin</span>
+    </div>
+    <button class="logout-btn" onclick="logout()">Logga ut</button>
+  </div>
+
   <nav>
     <a href="/">Kalender</a>
     <a href="/admin" class="active">Admin</a>
   </nav>
 
   <div class="container">
-    <!-- ÖVNINGAR -->
-    <div class="admin-section">
-      <div class="admin-section-header">
-        <h2>Övningar</h2>
-        <button class="btn btn-primary" onclick="openExerciseModal()">+ Ny övning</button>
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('content')">Innehåll</button>
+      <button class="tab" onclick="showTab('users')">Användare</button>
+      <button class="tab" onclick="showTab('invites')">Inbjudningar</button>
+    </div>
+
+    <!-- TAB: INNEHÅLL -->
+    <div class="tab-content active" id="tab-content">
+      <!-- ÖVNINGAR -->
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <h2>Övningar</h2>
+          <button class="btn btn-primary" onclick="openExerciseModal()">+ Ny övning</button>
+        </div>
+        <div class="admin-section-content">
+          <ul class="admin-list" id="exerciseList"></ul>
+          <div class="empty-state" id="exerciseEmptyState" style="display: none;">
+            <div class="empty-state-icon">⚽</div>
+            <h3>Inga övningar skapade</h3>
+            <p>Klicka på "Ny övning" för att skapa din första övning</p>
+          </div>
+        </div>
       </div>
-      <div class="admin-section-content">
-        <ul class="admin-list" id="exerciseList">
-          <!-- Övningar laddas här -->
-        </ul>
-        <div class="empty-state" id="exerciseEmptyState" style="display: none;">
-          <div class="empty-state-icon">⚽</div>
-          <h3>Inga övningar skapade</h3>
-          <p>Klicka på "Ny övning" för att skapa din första övning</p>
+
+      <!-- TRÄNINGAR -->
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <h2>Träningar</h2>
+          <button class="btn btn-primary" onclick="openTrainingModal()">+ Ny träning</button>
+        </div>
+        <div class="admin-section-content">
+          <ul class="admin-list" id="trainingList"></ul>
+          <div class="empty-state" id="trainingEmptyState" style="display: none;">
+            <div class="empty-state-icon">📅</div>
+            <h3>Inga träningar planerade</h3>
+            <p>Klicka på "Ny träning" för att skapa din första träning</p>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- TRÄNINGAR -->
-    <div class="admin-section">
-      <div class="admin-section-header">
-        <h2>Träningar</h2>
-        <button class="btn btn-primary" onclick="openTrainingModal()">+ Ny träning</button>
+    <!-- TAB: ANVÄNDARE -->
+    <div class="tab-content" id="tab-users">
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <h2>Användare</h2>
+        </div>
+        <div class="admin-section-content">
+          <ul class="admin-list" id="userList"></ul>
+          <div class="empty-state" id="userEmptyState" style="display: none;">
+            <div class="empty-state-icon">👥</div>
+            <h3>Inga användare</h3>
+          </div>
+        </div>
       </div>
-      <div class="admin-section-content">
-        <ul class="admin-list" id="trainingList">
-          <!-- Träningar laddas här -->
-        </ul>
-        <div class="empty-state" id="trainingEmptyState" style="display: none;">
-          <div class="empty-state-icon">📅</div>
-          <h3>Inga träningar planerade</h3>
-          <p>Klicka på "Ny träning" för att skapa din första träning</p>
+    </div>
+
+    <!-- TAB: INBJUDNINGAR -->
+    <div class="tab-content" id="tab-invites">
+      <div class="admin-section">
+        <div class="admin-section-header">
+          <h2>Inbjudningskoder</h2>
+          <button class="btn btn-primary" onclick="createInvite()">+ Skapa kod</button>
+        </div>
+        <div class="admin-section-content">
+          <p style="margin-bottom: 15px; color: #666;">
+            Skapa inbjudningskoder som du kan skicka till nya spelare. Varje kod kan bara användas en gång.
+          </p>
+          <ul class="admin-list" id="inviteList"></ul>
+          <div class="empty-state" id="inviteEmptyState" style="display: none;">
+            <div class="empty-state-icon">🎟️</div>
+            <h3>Inga inbjudningskoder</h3>
+            <p>Klicka på "Skapa kod" för att bjuda in nya spelare</p>
+          </div>
         </div>
       </div>
     </div>
@@ -86,7 +137,13 @@
           </div>
 
           <div class="form-group">
-            <label>Video</label>
+            <label for="youtubeUrl">YouTube-länk (valfritt)</label>
+            <input type="text" id="youtubeUrl" placeholder="https://www.youtube.com/watch?v=...">
+            <small>Klistra in en YouTube-länk för att visa videon</small>
+          </div>
+
+          <div class="form-group">
+            <label>Eller ladda upp video</label>
             <div class="file-upload" id="videoUpload">
               <input type="file" id="videoInput" accept="video/*">
               <p>Klicka eller dra en video hit</p>
@@ -135,9 +192,7 @@
 
           <div class="form-group">
             <label>Välj övningar</label>
-            <div id="exerciseCheckboxes">
-              <!-- Övningar laddas här -->
-            </div>
+            <div id="exerciseCheckboxes"></div>
           </div>
         </form>
       </div>

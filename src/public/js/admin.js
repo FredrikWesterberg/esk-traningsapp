@@ -1,28 +1,69 @@
 // ============ GLOBALA VARIABLER ============
 let trainings = [];
 let exercises = [];
+let users = [];
+let invites = [];
+let currentUser = null;
 let currentExerciseImages = [];
 let currentExerciseVideo = null;
+let currentExerciseYoutube = '';
 
 // ============ INITIERING ============
 document.addEventListener('DOMContentLoaded', () => {
+  loadUser();
   loadData();
   setupFileUploads();
 });
 
+async function loadUser() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      currentUser = await res.json();
+      document.getElementById('userName').textContent = currentUser.name;
+    }
+  } catch (error) {
+    console.error('Kunde inte ladda användare:', error);
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/login';
+  } catch (error) {
+    console.error('Kunde inte logga ut:', error);
+  }
+}
+
 async function loadData() {
   try {
-    const [trainingsRes, exercisesRes] = await Promise.all([
+    const [trainingsRes, exercisesRes, usersRes, invitesRes] = await Promise.all([
       fetch('/api/trainings'),
-      fetch('/api/exercises')
+      fetch('/api/exercises'),
+      fetch('/api/users'),
+      fetch('/api/invites')
     ]);
     trainings = await trainingsRes.json();
     exercises = await exercisesRes.json();
+    users = await usersRes.json();
+    invites = await invitesRes.json();
     renderExercises();
     renderTrainings();
+    renderUsers();
+    renderInvites();
   } catch (error) {
     console.error('Kunde inte ladda data:', error);
   }
+}
+
+// ============ TABS ============
+function showTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+  document.querySelector(`[onclick="showTab('${tabName}')"]`).classList.add('active');
+  document.getElementById(`tab-${tabName}`).classList.add('active');
 }
 
 // ============ RENDERING ============
@@ -43,7 +84,7 @@ function renderExercises() {
         <strong>${exercise.name}</strong>
         <p style="color: #666; font-size: 0.9rem;">
           ${exercise.images ? exercise.images.length : 0} bilder
-          ${exercise.video ? ', 1 video' : ''}
+          ${exercise.youtubeUrl ? ', YouTube' : exercise.video ? ', 1 video' : ''}
         </p>
       </div>
       <div class="admin-actions">
@@ -58,7 +99,6 @@ function renderTrainings() {
   const list = document.getElementById('trainingList');
   const emptyState = document.getElementById('trainingEmptyState');
 
-  // Sortera efter datum
   const sortedTrainings = [...trainings].sort((a, b) =>
     new Date(a.date) - new Date(b.date)
   );
@@ -97,15 +137,91 @@ function renderTrainings() {
   }).join('');
 }
 
+function renderUsers() {
+  const list = document.getElementById('userList');
+  const emptyState = document.getElementById('userEmptyState');
+
+  if (users.length === 0) {
+    list.innerHTML = '';
+    emptyState.style.display = 'block';
+    return;
+  }
+
+  emptyState.style.display = 'none';
+  list.innerHTML = users.map(user => {
+    const isCurrentUser = currentUser && user.id === currentUser.id;
+    return `
+      <li class="admin-list-item">
+        <div>
+          <strong>${user.name}</strong> ${isCurrentUser ? '(du)' : ''}
+          <p style="color: #666; font-size: 0.9rem;">
+            ${user.email} -
+            <span class="user-role" style="font-size: 0.75rem;">${user.role === 'admin' ? 'Admin' : 'Spelare'}</span>
+          </p>
+        </div>
+        <div class="admin-actions">
+          ${!isCurrentUser ? `
+            ${user.role === 'admin'
+              ? `<button class="btn btn-secondary" onclick="setUserRole('${user.id}', 'user')">Ta bort admin</button>`
+              : `<button class="btn btn-secondary" onclick="setUserRole('${user.id}', 'admin')">Gör till admin</button>`
+            }
+            <button class="btn btn-danger" onclick="deleteUser('${user.id}')">Ta bort</button>
+          ` : ''}
+        </div>
+      </li>
+    `;
+  }).join('');
+}
+
+function renderInvites() {
+  const list = document.getElementById('inviteList');
+  const emptyState = document.getElementById('inviteEmptyState');
+
+  if (invites.length === 0) {
+    list.innerHTML = '';
+    emptyState.style.display = 'block';
+    return;
+  }
+
+  emptyState.style.display = 'none';
+
+  const sortedInvites = [...invites].sort((a, b) => {
+    if (a.usedBy && !b.usedBy) return 1;
+    if (!a.usedBy && b.usedBy) return -1;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  list.innerHTML = sortedInvites.map(invite => {
+    const isUsed = !!invite.usedBy;
+    return `
+      <li class="admin-list-item">
+        <div>
+          <span class="invite-code">${invite.code}</span>
+          <span class="invite-status ${isUsed ? 'used' : 'available'}">
+            ${isUsed ? 'Använd' : 'Tillgänglig'}
+          </span>
+          ${isUsed ? `<p style="color: #666; font-size: 0.85rem; margin-top: 5px;">Använd av: ${invite.usedByName}</p>` : ''}
+        </div>
+        <div class="admin-actions">
+          ${!isUsed ? `<button class="btn btn-secondary" onclick="copyInvite('${invite.code}')">Kopiera</button>` : ''}
+          <button class="btn btn-danger" onclick="deleteInvite('${invite.id}')">Ta bort</button>
+        </div>
+      </li>
+    `;
+  }).join('');
+}
+
 // ============ ÖVNINGAR ============
 function openExerciseModal(exercise = null) {
   document.getElementById('exerciseModalTitle').textContent = exercise ? 'Redigera övning' : 'Ny övning';
   document.getElementById('exerciseId').value = exercise ? exercise.id : '';
   document.getElementById('exerciseName').value = exercise ? exercise.name : '';
   document.getElementById('exerciseDescription').value = exercise ? exercise.description : '';
+  document.getElementById('youtubeUrl').value = exercise ? exercise.youtubeUrl || '' : '';
 
   currentExerciseImages = exercise && exercise.images ? [...exercise.images] : [];
   currentExerciseVideo = exercise ? exercise.video : null;
+  currentExerciseYoutube = exercise ? exercise.youtubeUrl || '' : '';
 
   renderUploadedImages();
   renderUploadedVideo();
@@ -118,12 +234,14 @@ function closeExerciseModal() {
   document.getElementById('exerciseForm').reset();
   currentExerciseImages = [];
   currentExerciseVideo = null;
+  currentExerciseYoutube = '';
 }
 
 async function saveExercise() {
   const id = document.getElementById('exerciseId').value;
   const name = document.getElementById('exerciseName').value.trim();
   const description = document.getElementById('exerciseDescription').value.trim();
+  const youtubeUrl = document.getElementById('youtubeUrl').value.trim();
 
   if (!name) {
     alert('Du måste ange ett namn för övningen');
@@ -134,19 +252,18 @@ async function saveExercise() {
     name,
     description,
     images: currentExerciseImages,
-    video: currentExerciseVideo
+    video: youtubeUrl ? null : currentExerciseVideo,
+    youtubeUrl: youtubeUrl || null
   };
 
   try {
     if (id) {
-      // Uppdatera befintlig
       await fetch(`/api/exercises/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(exerciseData)
       });
     } else {
-      // Skapa ny
       await fetch('/api/exercises', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -192,7 +309,6 @@ function openTrainingModal(training = null) {
   document.getElementById('trainingLocation').value = training ? training.location || '' : '';
   document.getElementById('trainingDescription').value = training ? training.description || '' : '';
 
-  // Rendera övningscheckboxar
   const checkboxContainer = document.getElementById('exerciseCheckboxes');
   const selectedIds = training && training.exerciseIds ? training.exerciseIds : [];
 
@@ -228,7 +344,6 @@ async function saveTraining() {
     return;
   }
 
-  // Hämta valda övningar
   const checkboxes = document.querySelectorAll('input[name="exercises"]:checked');
   const exerciseIds = Array.from(checkboxes).map(cb => cb.value);
 
@@ -242,14 +357,12 @@ async function saveTraining() {
 
   try {
     if (id) {
-      // Uppdatera befintlig
       await fetch(`/api/trainings/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(trainingData)
       });
     } else {
-      // Skapa ny
       await fetch('/api/trainings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -286,9 +399,70 @@ async function deleteTraining(id) {
   }
 }
 
+// ============ ANVÄNDARE ============
+async function setUserRole(id, role) {
+  try {
+    await fetch(`/api/users/${id}/role`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role })
+    });
+    loadData();
+  } catch (error) {
+    console.error('Kunde inte ändra roll:', error);
+    alert('Något gick fel');
+  }
+}
+
+async function deleteUser(id) {
+  if (!confirm('Är du säker på att du vill ta bort denna användare?')) {
+    return;
+  }
+
+  try {
+    await fetch(`/api/users/${id}`, { method: 'DELETE' });
+    loadData();
+  } catch (error) {
+    console.error('Kunde inte ta bort användare:', error);
+    alert('Något gick fel');
+  }
+}
+
+// ============ INBJUDNINGAR ============
+async function createInvite() {
+  try {
+    await fetch('/api/invites', { method: 'POST' });
+    loadData();
+  } catch (error) {
+    console.error('Kunde inte skapa inbjudan:', error);
+    alert('Något gick fel');
+  }
+}
+
+function copyInvite(code) {
+  navigator.clipboard.writeText(code).then(() => {
+    alert(`Inbjudningskod kopierad: ${code}`);
+  }).catch(() => {
+    prompt('Kopiera denna kod:', code);
+  });
+}
+
+async function deleteInvite(id) {
+  if (!confirm('Är du säker på att du vill ta bort denna inbjudningskod?')) {
+    return;
+  }
+
+  try {
+    await fetch(`/api/invites/${id}`, { method: 'DELETE' });
+    loadData();
+  } catch (error) {
+    console.error('Kunde inte ta bort inbjudan:', error);
+    alert('Något gick fel');
+  }
+}
+
 // ============ FILUPPLADDNING ============
 function setupFileUploads() {
-  // Bilduppladdning
   const imageUpload = document.getElementById('imageUpload');
   const imageInput = document.getElementById('imageInput');
 
@@ -309,7 +483,6 @@ function setupFileUploads() {
     handleImageFiles(e.target.files);
   });
 
-  // Videouppladdning
   const videoUpload = document.getElementById('videoUpload');
   const videoInput = document.getElementById('videoInput');
 

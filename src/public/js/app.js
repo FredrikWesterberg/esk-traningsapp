@@ -1,11 +1,39 @@
 // ============ GLOBALA VARIABLER ============
 let trainings = [];
 let exercises = [];
+let currentUser = null;
 
 // ============ INITIERING ============
 document.addEventListener('DOMContentLoaded', () => {
+  loadUser();
   loadData();
 });
+
+async function loadUser() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      currentUser = await res.json();
+      document.getElementById('userName').textContent = currentUser.name;
+      document.getElementById('userRole').textContent = currentUser.role === 'admin' ? 'Admin' : 'Spelare';
+
+      if (currentUser.role === 'admin') {
+        document.getElementById('adminLink').style.display = 'inline-block';
+      }
+    }
+  } catch (error) {
+    console.error('Kunde inte ladda användare:', error);
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/login';
+  } catch (error) {
+    console.error('Kunde inte logga ut:', error);
+  }
+}
 
 async function loadData() {
   try {
@@ -26,12 +54,10 @@ function renderTrainings() {
   const list = document.getElementById('trainingList');
   const emptyState = document.getElementById('emptyState');
 
-  // Sortera träningar efter datum
   const sortedTrainings = [...trainings].sort((a, b) =>
     new Date(a.date) - new Date(b.date)
   );
 
-  // Filtrera bort gamla träningar (visa bara dagens och framtida)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const upcomingTrainings = sortedTrainings.filter(t =>
@@ -145,7 +171,20 @@ function openExercise(id) {
   }
 
   let videoHTML = '';
-  if (exercise.video) {
+  if (exercise.youtubeUrl) {
+    const youtubeId = getYoutubeId(exercise.youtubeUrl);
+    if (youtubeId) {
+      videoHTML = `
+        <div class="exercise-media">
+          <h3>Video</h3>
+          <div class="video-container">
+            <iframe src="https://www.youtube.com/embed/${youtubeId}"
+                    allowfullscreen></iframe>
+          </div>
+        </div>
+      `;
+    }
+  } else if (exercise.video) {
     videoHTML = `
       <div class="exercise-media">
         <h3>Video</h3>
@@ -179,6 +218,19 @@ function truncate(str, length) {
   if (!str) return '';
   if (str.length <= length) return str;
   return str.substring(0, length) + '...';
+}
+
+function getYoutubeId(url) {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /^([a-zA-Z0-9_-]{11})$/
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
 }
 
 // Stäng modal vid klick utanför

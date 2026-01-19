@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registrera - ESK Träningsapp</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header>
+    <h1>ESK Träningsapp</h1>
+    <p>Skapa ett konto</p>
+  </header>
+
+  <div class="container">
+    <div class="auth-card">
+      <h2>Registrera dig</h2>
+
+      <div class="alert alert-error" id="errorMessage" style="display: none;"></div>
+
+      <form id="registerForm">
+        <div class="form-group">
+          <label for="inviteCode">Inbjudningskod *</label>
+          <input type="text" id="inviteCode" required placeholder="Ange din inbjudningskod">
+          <small>Du behöver en inbjudningskod från en tränare för att registrera dig.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="name">Namn *</label>
+          <input type="text" id="name" required placeholder="Ditt namn">
+        </div>
+
+        <div class="form-group">
+          <label for="email">E-post *</label>
+          <input type="email" id="email" required placeholder="din@epost.se">
+        </div>
+
+        <div class="form-group">
+          <label for="password">Lösenord *</label>
+          <input type="password" id="password" required placeholder="Välj ett lösenord" minlength="6">
+          <small>Minst 6 tecken</small>
+        </div>
+
+        <div class="form-group">
+          <label for="passwordConfirm">Bekräfta lösenord *</label>
+          <input type="password" id="passwordConfirm" required placeholder="Upprepa lösenordet">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Skapa konto</button>
+      </form>
+
+      <p class="auth-link">
+        Har du redan ett konto? <a href="/login">Logga in</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const inviteCode = document.getElementById('inviteCode').value.trim().toUpperCase();
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const passwordConfirm = document.getElementById('passwordConfirm').value;
+      const errorDiv = document.getElementById('errorMessage');
+
+      // Validera lösenord
+      if (password !== passwordConfirm) {
+        errorDiv.textContent = 'Lösenorden matchar inte';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      if (password.length < 6) {
+        errorDiv.textContent = 'Lösenordet måste vara minst 6 tecken';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inviteCode, name, email, password })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          window.location.href = '/';
+        } else {
+          errorDiv.textContent = data.error;
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        errorDiv.textContent = 'Något gick fel. Försök igen.';
+        errorDiv.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>
