@@ -44,6 +44,25 @@ if (!fs.existsSync(EXERCISES_FILE)) writeJSON(EXERCISES_FILE, []);
 if (!fs.existsSync(USERS_FILE)) writeJSON(USERS_FILE, []);
 if (!fs.existsSync(INVITES_FILE)) writeJSON(INVITES_FILE, []);
 
+// Skapa initial inbjudningskod om det inte finns några användare
+const users = readJSON(USERS_FILE);
+const invites = readJSON(INVITES_FILE);
+const hasAvailableInvite = invites.some(i => !i.usedBy);
+
+if (users.length === 0 && !hasAvailableInvite) {
+  const initialInvite = {
+    id: 'initial',
+    code: 'ESKADMIN1',
+    createdBy: 'system',
+    createdAt: new Date().toISOString(),
+    usedBy: null,
+    usedAt: null
+  };
+  invites.push(initialInvite);
+  writeJSON(INVITES_FILE, invites);
+  console.log('Initial inbjudningskod skapad: ESKADMIN1');
+}
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
