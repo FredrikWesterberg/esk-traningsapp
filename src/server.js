@@ -64,16 +64,20 @@ if (users.length === 0 && !hasAvailableInvite) {
 }
 
 // Middleware
+app.set('trust proxy', 1); // Trust first proxy (Render)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+const isProduction = process.env.RENDER || process.env.NODE_ENV === 'production';
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'esk-traning-secret-key-change-in-production',
+  secret: process.env.SESSION_SECRET || 'esk-traning-secret-key-2024',
   resave: false,
   saveUninitialized: false,
+  proxy: isProduction,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProduction,
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dagar
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dagar
+    sameSite: isProduction ? 'none' : 'lax'
   }
 }));
 
