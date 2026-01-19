@@ -72,7 +72,7 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false,
+    secure: !!process.env.RENDER,
     httpOnly: true,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dagar
     sameSite: 'lax'
