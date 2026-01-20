@@ -31,7 +31,7 @@ app.use(express.urlencoded({ extended: true }));
 // Session med PostgreSQL-lagring
 app.use(session({
   store: new pgSession({
-    pool: sequelize.connectionManager.pool,
+    conString: process.env.DATABASE_URL,
     tableName: 'session',
     createTableIfMissing: true
   }),
@@ -54,17 +54,25 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 // ============ AUTH MIDDLEWARE ============
 
 async function requireAuth(req, res, next) {
-  if (req.session && req.session.userId) {
-    const user = await User.findByPk(req.session.userId);
-    if (user) {
-      req.user = user;
-      return next();
+  try {
+    if (req.session && req.session.userId) {
+      const user = await User.findByPk(req.session.userId);
+      if (user) {
+        req.user = user;
+        return next();
+      }
     }
+    if (req.path.startsWith('/api/')) {
+      return res.status(401).json({ error: 'Ej inloggad' });
+    }
+    res.redirect('/login');
+  } catch (error) {
+    console.error('requireAuth fel:', error);
+    if (req.path.startsWith('/api/')) {
+      return res.status(500).json({ error: 'Serverfel vid autentisering' });
+    }
+    res.status(500).send('Serverfel vid autentisering');
   }
-  if (req.path.startsWith('/api/')) {
-    return res.status(401).json({ error: 'Ej inloggad' });
-  }
-  res.redirect('/login');
 }
 
 function requireAdmin(req, res, next) {
