@@ -4,70 +4,37 @@ const fs = require('fs');
 const multer = require('multer');
 const bcrypt = require('bcrypt');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
+const { sequelize, User, Invite, Training, Exercise, initDatabase } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Sökvägar till data
+// Sökvägar för filer (uploads behålls lokalt)
 const DATA_DIR = path.join(__dirname, '..', 'data');
-const TRAININGS_FILE = path.join(DATA_DIR, 'trainings.json');
-const EXERCISES_FILE = path.join(DATA_DIR, 'exercises.json');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
-const INVITES_FILE = path.join(DATA_DIR, 'invites.json');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 const IMAGES_DIR = path.join(UPLOADS_DIR, 'images');
 const VIDEOS_DIR = path.join(UPLOADS_DIR, 'videos');
 
-// Skapa mappar om de inte finns
+// Skapa mappar för uppladdningar om de inte finns
 [DATA_DIR, UPLOADS_DIR, IMAGES_DIR, VIDEOS_DIR].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 });
 
-// Hjälpfunktioner för att läsa/skriva JSON
-function readJSON(filepath) {
-  if (!fs.existsSync(filepath)) {
-    return [];
-  }
-  const data = fs.readFileSync(filepath, 'utf-8');
-  return JSON.parse(data);
-}
-
-function writeJSON(filepath, data) {
-  fs.writeFileSync(filepath, JSON.stringify(data, null, 2), 'utf-8');
-}
-
-// Initiera datafiler om de inte finns
-if (!fs.existsSync(TRAININGS_FILE)) writeJSON(TRAININGS_FILE, []);
-if (!fs.existsSync(EXERCISES_FILE)) writeJSON(EXERCISES_FILE, []);
-if (!fs.existsSync(USERS_FILE)) writeJSON(USERS_FILE, []);
-if (!fs.existsSync(INVITES_FILE)) writeJSON(INVITES_FILE, []);
-
-// Skapa initial inbjudningskod om det inte finns några användare
-const users = readJSON(USERS_FILE);
-const invites = readJSON(INVITES_FILE);
-const hasAvailableInvite = invites.some(i => !i.usedBy);
-
-if (users.length === 0 && !hasAvailableInvite) {
-  const initialInvite = {
-    id: 'initial',
-    code: 'ESKADMIN1',
-    createdBy: 'system',
-    createdAt: new Date().toISOString(),
-    usedBy: null,
-    usedAt: null
-  };
-  invites.push(initialInvite);
-  writeJSON(INVITES_FILE, invites);
-  console.log('Initial inbjudningskod skapad: ESKADMIN1');
-}
-
 // Middleware
-app.set('trust proxy', 1); // Trust first proxy (Render)
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Session med PostgreSQL-lagring
 app.use(session({
+  store: new pgSession({
+    pool: sequelize.connectionManager.pool,
+    tableName: 'session',
+    createTableIfMissing: true
+  }),
   secret: process.env.SESSION_SECRET || 'esk-traning-secret-key-2024',
   resave: false,
   saveUninitialized: false,
@@ -79,17 +46,16 @@ app.use(session({
   }
 }));
 
-// Statiska filer (men skyddade routes hanteras separat)
+// Statiska filer
 app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
 app.use('/js', express.static(path.join(__dirname, 'public', 'js')));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
 // ============ AUTH MIDDLEWARE ============
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   if (req.session && req.session.userId) {
-    const users = readJSON(USERS_FILE);
-    const user = users.find(u => u.id === req.session.userId);
+    const user = await User.findByPk(req.session.userId);
     if (user) {
       req.user = user;
       return next();
@@ -113,7 +79,6 @@ function requireAdmin(req, res, next) {
 
 // ============ AUTH ROUTES ============
 
-// Visa login-sida
 app.get('/login', (req, res) => {
   if (req.session && req.session.userId) {
     return res.redirect('/');
@@ -121,7 +86,6 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-// Visa registrerings-sida
 app.get('/register', (req, res) => {
   if (req.session && req.session.userId) {
     return res.redirect('/');
@@ -129,7 +93,6 @@ app.get('/register', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'register.html'));
 });
 
-// Login API
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
@@ -137,8 +100,12 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(400).json({ error: 'E-post och lösenord krävs' });
   }
 
-  const users = readJSON(USERS_FILE);
-  const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  const user = await User.findOne({
+    where: sequelize.where(
+      sequelize.fn('LOWER', sequelize.col('email')),
+      email.toLowerCase()
+    )
+  });
 
   if (!user) {
     return res.status(401).json({ error: 'Felaktig e-post eller lösenord' });
@@ -153,7 +120,6 @@ app.post('/api/auth/login', async (req, res) => {
   res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });
 
-// Registrering API
 app.post('/api/auth/register', async (req, res) => {
   const { name, email, password, inviteCode } = req.body;
 
@@ -162,52 +128,54 @@ app.post('/api/auth/register', async (req, res) => {
   }
 
   // Kolla inbjudningskod
-  const invites = readJSON(INVITES_FILE);
-  const invite = invites.find(i => i.code === inviteCode && !i.usedBy);
+  const invite = await Invite.findOne({
+    where: { code: inviteCode, usedBy: null }
+  });
 
   if (!invite) {
     return res.status(400).json({ error: 'Ogiltig eller redan använd inbjudningskod' });
   }
 
   // Kolla om e-post redan finns
-  const users = readJSON(USERS_FILE);
-  if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+  const existingUser = await User.findOne({
+    where: sequelize.where(
+      sequelize.fn('LOWER', sequelize.col('email')),
+      email.toLowerCase()
+    )
+  });
+
+  if (existingUser) {
     return res.status(400).json({ error: 'E-postadressen är redan registrerad' });
   }
 
   // Skapa användare
   const hashedPassword = await bcrypt.hash(password, 10);
-  const isFirstUser = users.length === 0;
+  const userCount = await User.count();
+  const isFirstUser = userCount === 0;
 
-  const newUser = {
+  const newUser = await User.create({
     id: Date.now().toString(),
     name,
     email: email.toLowerCase(),
     password: hashedPassword,
-    role: isFirstUser ? 'admin' : 'user', // Första användaren blir admin
-    createdAt: new Date().toISOString()
-  };
-
-  users.push(newUser);
-  writeJSON(USERS_FILE, users);
+    role: isFirstUser ? 'admin' : 'user'
+  });
 
   // Markera inbjudan som använd
-  invite.usedBy = newUser.id;
-  invite.usedAt = new Date().toISOString();
-  writeJSON(INVITES_FILE, invites);
+  await invite.update({
+    usedBy: newUser.id,
+    usedAt: new Date()
+  });
 
-  // Logga in direkt
   req.session.userId = newUser.id;
   res.status(201).json({ success: true, user: { id: newUser.id, name: newUser.name, email: newUser.email, role: newUser.role } });
 });
 
-// Logout API
 app.post('/api/auth/logout', (req, res) => {
   req.session.destroy();
   res.json({ success: true });
 });
 
-// Hämta nuvarande användare
 app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({
     id: req.user.id,
@@ -219,102 +187,74 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
 
 // ============ INVITE ROUTES (Admin only) ============
 
-// Hämta alla inbjudningar
-app.get('/api/invites', requireAuth, requireAdmin, (req, res) => {
-  const invites = readJSON(INVITES_FILE);
-  const users = readJSON(USERS_FILE);
+app.get('/api/invites', requireAuth, requireAdmin, async (req, res) => {
+  const invites = await Invite.findAll({ order: [['createdAt', 'DESC']] });
 
-  // Lägg till användarnamn för använda inbjudningar
-  const invitesWithUser = invites.map(invite => {
-    if (invite.usedBy) {
-      const user = users.find(u => u.id === invite.usedBy);
-      return { ...invite, usedByName: user ? user.name : 'Okänd' };
+  const invitesWithUser = await Promise.all(invites.map(async invite => {
+    const data = invite.toJSON();
+    if (data.usedBy) {
+      const user = await User.findByPk(data.usedBy);
+      data.usedByName = user ? user.name : 'Okänd';
     }
-    return invite;
-  });
+    return data;
+  }));
 
   res.json(invitesWithUser);
 });
 
-// Skapa ny inbjudningskod
-app.post('/api/invites', requireAuth, requireAdmin, (req, res) => {
-  const invites = readJSON(INVITES_FILE);
-
-  // Generera en slumpmässig 8-teckens kod
+app.post('/api/invites', requireAuth, requireAdmin, async (req, res) => {
   const code = Math.random().toString(36).substring(2, 10).toUpperCase();
 
-  const newInvite = {
+  const newInvite = await Invite.create({
     id: Date.now().toString(),
     code,
-    createdBy: req.user.id,
-    createdAt: new Date().toISOString(),
-    usedBy: null,
-    usedAt: null
-  };
+    createdBy: req.user.id
+  });
 
-  invites.push(newInvite);
-  writeJSON(INVITES_FILE, invites);
   res.status(201).json(newInvite);
 });
 
-// Ta bort inbjudningskod
-app.delete('/api/invites/:id', requireAuth, requireAdmin, (req, res) => {
-  let invites = readJSON(INVITES_FILE);
-  invites = invites.filter(i => i.id !== req.params.id);
-  writeJSON(INVITES_FILE, invites);
+app.delete('/api/invites/:id', requireAuth, requireAdmin, async (req, res) => {
+  await Invite.destroy({ where: { id: req.params.id } });
   res.json({ success: true });
 });
 
 // ============ USER MANAGEMENT ROUTES (Admin only) ============
 
-// Hämta alla användare
-app.get('/api/users', requireAuth, requireAdmin, (req, res) => {
-  const users = readJSON(USERS_FILE);
-  // Skicka inte lösenord
-  const safeUsers = users.map(u => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    role: u.role,
-    createdAt: u.createdAt
-  }));
-  res.json(safeUsers);
+app.get('/api/users', requireAuth, requireAdmin, async (req, res) => {
+  const users = await User.findAll({
+    attributes: ['id', 'name', 'email', 'role', 'createdAt'],
+    order: [['createdAt', 'DESC']]
+  });
+  res.json(users);
 });
 
-// Uppdatera användares roll
-app.put('/api/users/:id/role', requireAuth, requireAdmin, (req, res) => {
+app.put('/api/users/:id/role', requireAuth, requireAdmin, async (req, res) => {
   const { role } = req.body;
 
   if (!['admin', 'user'].includes(role)) {
     return res.status(400).json({ error: 'Ogiltig roll' });
   }
 
-  const users = readJSON(USERS_FILE);
-  const index = users.findIndex(u => u.id === req.params.id);
-
-  if (index === -1) {
+  const user = await User.findByPk(req.params.id);
+  if (!user) {
     return res.status(404).json({ error: 'Användare hittades inte' });
   }
 
-  // Förhindra att ta bort sin egen admin-roll
   if (req.params.id === req.user.id && role !== 'admin') {
     return res.status(400).json({ error: 'Du kan inte ta bort din egen admin-behörighet' });
   }
 
-  users[index].role = role;
-  writeJSON(USERS_FILE, users);
+  await user.update({ role });
   res.json({ success: true });
 });
 
-// Ta bort användare
-app.delete('/api/users/:id', requireAuth, requireAdmin, (req, res) => {
+app.delete('/api/users/:id', requireAuth, requireAdmin, async (req, res) => {
   if (req.params.id === req.user.id) {
     return res.status(400).json({ error: 'Du kan inte ta bort dig själv' });
   }
 
-  let users = readJSON(USERS_FILE);
-  users = users.filter(u => u.id !== req.params.id);
-  writeJSON(USERS_FILE, users);
+  await User.destroy({ where: { id: req.params.id } });
   res.json({ success: true });
 });
 
@@ -345,115 +285,89 @@ const upload = multer({
   }
 });
 
-// ============ PROTECTED API ROUTES ============
+// ============ TRAINING ROUTES ============
 
-// Hämta alla träningar
-app.get('/api/trainings', requireAuth, (req, res) => {
-  const trainings = readJSON(TRAININGS_FILE);
+app.get('/api/trainings', requireAuth, async (req, res) => {
+  const trainings = await Training.findAll({ order: [['date', 'ASC'], ['time', 'ASC']] });
   res.json(trainings);
 });
 
-// Hämta en specifik träning
-app.get('/api/trainings/:id', requireAuth, (req, res) => {
-  const trainings = readJSON(TRAININGS_FILE);
-  const training = trainings.find(t => t.id === req.params.id);
+app.get('/api/trainings/:id', requireAuth, async (req, res) => {
+  const training = await Training.findByPk(req.params.id);
   if (!training) {
     return res.status(404).json({ error: 'Träning hittades inte' });
   }
   res.json(training);
 });
 
-// Skapa ny träning (admin only)
-app.post('/api/trainings', requireAuth, requireAdmin, (req, res) => {
-  const trainings = readJSON(TRAININGS_FILE);
-  const newTraining = {
+app.post('/api/trainings', requireAuth, requireAdmin, async (req, res) => {
+  const newTraining = await Training.create({
     id: Date.now().toString(),
     date: req.body.date,
     time: req.body.time,
     location: req.body.location || '',
     description: req.body.description || '',
-    exerciseIds: req.body.exerciseIds || [],
-    createdAt: new Date().toISOString()
-  };
-  trainings.push(newTraining);
-  writeJSON(TRAININGS_FILE, trainings);
+    exerciseIds: req.body.exerciseIds || []
+  });
   res.status(201).json(newTraining);
 });
 
-// Uppdatera träning (admin only)
-app.put('/api/trainings/:id', requireAuth, requireAdmin, (req, res) => {
-  const trainings = readJSON(TRAININGS_FILE);
-  const index = trainings.findIndex(t => t.id === req.params.id);
-  if (index === -1) {
+app.put('/api/trainings/:id', requireAuth, requireAdmin, async (req, res) => {
+  const training = await Training.findByPk(req.params.id);
+  if (!training) {
     return res.status(404).json({ error: 'Träning hittades inte' });
   }
-  trainings[index] = { ...trainings[index], ...req.body };
-  writeJSON(TRAININGS_FILE, trainings);
-  res.json(trainings[index]);
+  await training.update(req.body);
+  res.json(training);
 });
 
-// Ta bort träning (admin only)
-app.delete('/api/trainings/:id', requireAuth, requireAdmin, (req, res) => {
-  let trainings = readJSON(TRAININGS_FILE);
-  trainings = trainings.filter(t => t.id !== req.params.id);
-  writeJSON(TRAININGS_FILE, trainings);
+app.delete('/api/trainings/:id', requireAuth, requireAdmin, async (req, res) => {
+  await Training.destroy({ where: { id: req.params.id } });
   res.json({ success: true });
 });
 
-// Hämta alla övningar
-app.get('/api/exercises', requireAuth, (req, res) => {
-  const exercises = readJSON(EXERCISES_FILE);
+// ============ EXERCISE ROUTES ============
+
+app.get('/api/exercises', requireAuth, async (req, res) => {
+  const exercises = await Exercise.findAll({ order: [['createdAt', 'DESC']] });
   res.json(exercises);
 });
 
-// Hämta en specifik övning
-app.get('/api/exercises/:id', requireAuth, (req, res) => {
-  const exercises = readJSON(EXERCISES_FILE);
-  const exercise = exercises.find(e => e.id === req.params.id);
+app.get('/api/exercises/:id', requireAuth, async (req, res) => {
+  const exercise = await Exercise.findByPk(req.params.id);
   if (!exercise) {
     return res.status(404).json({ error: 'Övning hittades inte' });
   }
   res.json(exercise);
 });
 
-// Skapa ny övning (admin only)
-app.post('/api/exercises', requireAuth, requireAdmin, (req, res) => {
-  const exercises = readJSON(EXERCISES_FILE);
-  const newExercise = {
+app.post('/api/exercises', requireAuth, requireAdmin, async (req, res) => {
+  const newExercise = await Exercise.create({
     id: Date.now().toString(),
     name: req.body.name,
     description: req.body.description || '',
     images: req.body.images || [],
     video: req.body.video || null,
-    youtubeUrl: req.body.youtubeUrl || null,
-    createdAt: new Date().toISOString()
-  };
-  exercises.push(newExercise);
-  writeJSON(EXERCISES_FILE, exercises);
+    youtubeUrl: req.body.youtubeUrl || null
+  });
   res.status(201).json(newExercise);
 });
 
-// Uppdatera övning (admin only)
-app.put('/api/exercises/:id', requireAuth, requireAdmin, (req, res) => {
-  const exercises = readJSON(EXERCISES_FILE);
-  const index = exercises.findIndex(e => e.id === req.params.id);
-  if (index === -1) {
+app.put('/api/exercises/:id', requireAuth, requireAdmin, async (req, res) => {
+  const exercise = await Exercise.findByPk(req.params.id);
+  if (!exercise) {
     return res.status(404).json({ error: 'Övning hittades inte' });
   }
-  exercises[index] = { ...exercises[index], ...req.body };
-  writeJSON(EXERCISES_FILE, exercises);
-  res.json(exercises[index]);
+  await exercise.update(req.body);
+  res.json(exercise);
 });
 
-// Ta bort övning (admin only)
-app.delete('/api/exercises/:id', requireAuth, requireAdmin, (req, res) => {
-  let exercises = readJSON(EXERCISES_FILE);
-  exercises = exercises.filter(e => e.id !== req.params.id);
-  writeJSON(EXERCISES_FILE, exercises);
+app.delete('/api/exercises/:id', requireAuth, requireAdmin, async (req, res) => {
+  await Exercise.destroy({ where: { id: req.params.id } });
   res.json({ success: true });
 });
 
-// Ladda upp fil (admin only)
+// Upload endpoint
 app.post('/api/upload', requireAuth, requireAdmin, upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Ingen fil uppladdad' });
@@ -469,19 +383,29 @@ app.post('/api/upload', requireAuth, requireAdmin, upload.single('file'), (req, 
 
 // ============ PROTECTED HTML ROUTES ============
 
-// Startsida - Kalender
 app.get('/', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Admin-sida
 app.get('/admin', requireAuth, requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// Starta servern
-app.listen(PORT, () => {
-  console.log(`\n🏃 Träningsappen körs på http://localhost:${PORT}`);
-  console.log(`📋 Admin-sida: http://localhost:${PORT}/admin`);
-  console.log(`\nTryck Ctrl+C för att stänga servern\n`);
-});
+// ============ START SERVER ============
+
+async function startServer() {
+  const dbConnected = await initDatabase();
+
+  if (!dbConnected) {
+    console.error('Kunde inte ansluta till databasen. Servern startar inte.');
+    process.exit(1);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`\nTräningsappen körs på http://localhost:${PORT}`);
+    console.log(`Admin-sida: http://localhost:${PORT}/admin`);
+    console.log(`\nTryck Ctrl+C för att stänga servern\n`);
+  });
+}
+
+startServer();
